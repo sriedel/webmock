@@ -18,6 +18,10 @@ if defined?(Curl)
         def self.enable!
           Curl.send(:remove_const, :Easy)
           Curl.send(:const_set, :Easy, Curl::WebMockCurlEasy)
+          enable_multi!
+        end
+
+        def self.enable_multi!
           Curl.send(:remove_const, :Multi)
           Curl.send(:const_set, :Multi, Curl::WebMockCurlMulti)
         end
@@ -25,6 +29,10 @@ if defined?(Curl)
         def self.disable!
           Curl.send(:remove_const, :Easy)
           Curl.send(:const_set, :Easy, OriginalCurlEasy)
+          disable_multi!
+        end
+
+        def self.disable_multi!
           Curl.send(:remove_const, :Multi)
           Curl.send(:const_set, :Multi, OriginalCurlMulti)
         end
@@ -61,8 +69,6 @@ if defined?(Curl)
 
   module Curl
     class WebMockCurlEasy < Curl::Easy
-      WEBMOCK_CALLBACK_OPTIONS = { :lib => :curb }.freeze
-      WBEMOCK_REAL_REQUEST_CALLBACK_OPTIONS = { :lib => :curb, :real_request => true }.freeze
       def curb_or_webmock
         request_signature = build_request_signature
         WebMock::RequestRegistry.instance.requested_signatures.put(request_signature)
@@ -70,16 +76,32 @@ if defined?(Curl)
 
         if webmock_response
           build_curb_response(webmock_response)
-          WebMock::CallbackRegistry.invoke_callbacks( WEBMOCK_CALLBACK_OPTIONS,
+          WebMock::CallbackRegistry.invoke_callbacks( { :lib => :curb },
                                                       request_signature, 
                                                       webmock_response )
           invoke_curb_callbacks
           true
         elsif WebMock.net_connect_allowed?( request_signature.uri )
-          res = yield
+          # NOTE: must disable multi heere, since Curl::Easy is essentially a
+          #       wrapper around Curl::Multi. However the WebMockCurlMulti 
+          #       class is a wrapper around WebMockCurlEasy. Thus we'd have
+          #       a circular reference if web requests are enabled but the
+          #       mocked classes are active.
+          #       
+          #       The cleaner way would be to have the entire webmock logic in
+          #       the WebMockCurlMulti class.
+          #
+          begin
+            WebMock::HttpLibAdapters::CurbAdapter.disable_multi!
+            res = yield
+          ensure
+            WebMock::HttpLibAdapters::CurbAdapter.enable_multi!
+          end
+
           if WebMock::CallbackRegistry.any_callbacks?
             webmock_response = build_webmock_response
-            WebMock::CallbackRegistry.invoke_callbacks( WEBMOCK_REAL_REQUEST_CALLBACK_OPTIONS,
+                                                        
+            WebMock::CallbackRegistry.invoke_callbacks( { :lib => :curb, :real_request => true },
                                                         request_signature,
                                                         webmock_response)
           end
