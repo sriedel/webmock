@@ -12,37 +12,44 @@ if defined?(Curl)
       class CurbAdapter < HttpLibAdapter
         adapter_for :curb
 
-        OriginalCurlEasy = Curl::Easy unless const_defined?(:OriginalCurlEasy)
+        OriginalCurlEasy  = Curl::Easy unless const_defined?(:OriginalCurlEasy)
+        OriginalCurlMulti = Curl::Multi unless const_defined?(:OriginalCurlMulti)
 
         def self.enable!
           Curl.send(:remove_const, :Easy)
           Curl.send(:const_set, :Easy, Curl::WebMockCurlEasy)
+          Curl.send(:remove_const, :Multi)
+          Curl.send(:const_set, :Multi, Curl::WebMockCurlMulti)
         end
 
         def self.disable!
           Curl.send(:remove_const, :Easy)
           Curl.send(:const_set, :Easy, OriginalCurlEasy)
+          Curl.send(:remove_const, :Multi)
+          Curl.send(:const_set, :Multi, OriginalCurlMulti)
         end
 
         # Borrowed from Patron:
         # http://github.com/toland/patron/blob/master/lib/patron/response.rb
         def self.parse_header_string(header_string)
-          status, headers = nil, {}
+          status = nil
+          headers = {}
 
           header_string.split(/\r\n/).each do |header|
             if header =~ %r|^HTTP/1.[01] \d\d\d (.*)|
               status = $1
+              next
+            end
+
+            name, value = header.split(':', 2)
+            next if name == nil && value == nil
+            value.strip! if value
+            if headers.has_key?( name )
+              current_value = headers[name]
+              headers[name] = [current_value] unless current_value.kind_of? Array
+              headers[name] << value
             else
-              parts = header.split(':', 2)
-              unless parts.empty?
-                parts[1].strip! unless parts[1].nil?
-                if headers.has_key?(parts[0])
-                  headers[parts[0]] = [headers[parts[0]]] unless headers[parts[0]].kind_of? Array
-                  headers[parts[0]] << parts[1]
-                else
-                  headers[parts[0]] = parts[1]
-                end
-              end
+              headers[name] = value
             end
           end
 
@@ -54,24 +61,27 @@ if defined?(Curl)
 
   module Curl
     class WebMockCurlEasy < Curl::Easy
+      WEBMOCK_CALLBACK_OPTIONS = { :lib => :curb }.freeze
+      WBEMOCK_REAL_REQUEST_CALLBACK_OPTIONS = { :lib => :curb, :real_request => true }.freeze
       def curb_or_webmock
-
         request_signature = build_request_signature
         WebMock::RequestRegistry.instance.requested_signatures.put(request_signature)
+        webmock_response = WebMock::StubRegistry.instance.response_for_request(request_signature)
 
-        if webmock_response = WebMock::StubRegistry.instance.response_for_request(request_signature)
+        if webmock_response
           build_curb_response(webmock_response)
-          WebMock::CallbackRegistry.invoke_callbacks(
-            {:lib => :curb}, request_signature, webmock_response)
+          WebMock::CallbackRegistry.invoke_callbacks( WEBMOCK_CALLBACK_OPTIONS,
+                                                      request_signature, 
+                                                      webmock_response )
           invoke_curb_callbacks
           true
-        elsif WebMock.net_connect_allowed?(request_signature.uri)
+        elsif WebMock.net_connect_allowed?( request_signature.uri )
           res = yield
           if WebMock::CallbackRegistry.any_callbacks?
             webmock_response = build_webmock_response
-            WebMock::CallbackRegistry.invoke_callbacks(
-              {:lib => :curb, :real_request => true}, request_signature,
-                webmock_response)
+            WebMock::CallbackRegistry.invoke_callbacks( WEBMOCK_REAL_REQUEST_CALLBACK_OPTIONS,
+                                                        request_signature,
+                                                        webmock_response)
           end
           res
         else
@@ -84,28 +94,24 @@ if defined?(Curl)
 
         uri = WebMock::Util::URI.heuristic_parse(self.url)
         uri.path = uri.normalized_path.gsub("[^:]//","/")
-        uri.user = self.username
-        uri.password = self.password
-
-        request_body = case method
-        when :post
-          self.post_body || @post_body
-        when :put
-          @put_data
-        else
-          nil
+        if self.userpwd
+          uri.user, uri.password = self.userpwd.split( ":", 2 )
+        else 
+          uri.user     = self.username
+          uri.password = self.password
         end
 
-        request_signature = WebMock::RequestSignature.new(
-          method,
-          uri.to_s,
-          :body => request_body,
-          :headers => self.headers
-        )
-        request_signature
+        request_body = case method
+                         when :post then self.post_body || @post_body
+                         when :put  then @put_data
+                         else nil
+                       end
+
+        WebMock::RequestSignature.new( method, uri.to_s, :body    => request_body,
+                                                         :headers => self.headers )
       end
 
-      def build_curb_response(webmock_response)
+      def build_curb_response( webmock_response )
         raise Curl::Err::TimeoutError if webmock_response.should_timeout
         webmock_response.raise_error_if_any
 
@@ -115,8 +121,8 @@ if defined?(Curl)
         @header_str = "HTTP/1.1 #{webmock_response.status[0]} #{webmock_response.status[1]}\r\n"
         if webmock_response.headers
           @header_str << webmock_response.headers.map do |k,v|
-            "#{k}: #{v.is_a?(Array) ? v.join(", ") : v}"
-          end.join("\r\n")
+                           "#{k}: #{v.is_a?(Array) ? v.join(", ") : v}"
+                         end.join("\r\n")
 
           location = webmock_response.headers['Location']
           if self.follow_location? && location
@@ -124,7 +130,7 @@ if defined?(Curl)
             webmock_follow_location(location)
           end
 
-          @content_type = webmock_response.headers["Content-Type"]
+          @content_type      = webmock_response.headers["Content-Type"]
           @transfer_encoding = webmock_response.headers["Transfer-Encoding"]
         end
 
@@ -147,9 +153,7 @@ if defined?(Curl)
         self.header_str.lines.each { |header_line| @on_header.call header_line } if defined?( @on_header )
         if defined?( @on_body )
           if chunked_response?
-            self.body_str.each do |chunk|
-              @on_body.call(chunk)
-            end
+            self.body_str.each { |chunk| @on_body.call(chunk) }
           else
             @on_body.call(self.body_str)
           end
@@ -157,12 +161,9 @@ if defined?(Curl)
         @on_complete.call(self) if defined?( @on_complete )
 
         case response_code
-        when 200..299
-          @on_success.call(self) if defined?( @on_success )
-        when 400..499
-          @on_missing.call(self, self.response_code) if defined?( @on_missing )
-        when 500..599
-          @on_failure.call(self, self.response_code) if defined?( @on_failure )
+          when 200..299 then @on_success.call(self)                     if defined?( @on_success )
+          when 400..499 then @on_missing.call(self, self.response_code) if defined?( @on_missing )
+          when 500..599 then @on_failure.call(self, self.response_code) if defined?( @on_failure )
         end
       end
 
@@ -266,6 +267,46 @@ if defined?(Curl)
             super
           end
         METHOD
+      end
+    end
+
+    class WebMockCurlMulti < Curl::Multi
+      def perform
+        @idle = false
+        yield if block_given?
+
+        requests.each do |request|
+          yield if block_given?
+          request.perform
+        end
+
+        yield if block_given?
+        @idle = true
+        true
+      end
+
+      def add( curl_easy )
+        @requests ||= []
+        @requests << curl_easy
+        self
+      end
+
+      def remove( curl_easy )
+        @requests.delete( curl_easy )
+        self
+      end
+
+      def cancel!
+        @requests.clear
+        self
+      end
+
+      def requests
+        @requests ||= []
+      end
+
+      def idle?
+        @idle = true unless defined?( @idle )
       end
     end
   end
