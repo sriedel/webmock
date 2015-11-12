@@ -181,6 +181,7 @@ if defined?(Curl)
           end
         end
         @on_complete.call(self) if defined?( @on_complete )
+        #FIXME: on_complete should be called with self, self.response_code
 
         case response_code
           when 200..299 then @on_success.call(self)                     if defined?( @on_success )
@@ -294,33 +295,35 @@ if defined?(Curl)
     end
 
     class WebMockCurlMulti < Curl::Multi
+      def initialize
+        @requests = []
+        super
+      end
+
       def perform
-        @idle = false
         yield if block_given?
 
-        requests.each do |request|
+        while !self.idle?
           yield if block_given?
+          request = self.requests.pop
           request.perform
         end
 
-        yield if block_given?
-        @idle = true
         true
       end
 
       def add( curl_easy )
-        @requests ||= []
-        @requests << curl_easy
+        requests << curl_easy
         self
       end
 
       def remove( curl_easy )
-        @requests.delete( curl_easy )
+        requests.delete( curl_easy )
         self
       end
 
       def cancel!
-        @requests.clear
+        requests.clear
         self
       end
 
@@ -329,8 +332,7 @@ if defined?(Curl)
       end
 
       def idle?
-        @idle = true unless defined?( @idle )
-        @idle
+        requests.empty?
       end
     end
   end
