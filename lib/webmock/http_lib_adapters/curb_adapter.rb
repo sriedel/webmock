@@ -184,6 +184,7 @@ if defined?(Curl)
 
         case response_code
           when 200..299 then @on_success.call(self)                     if defined?( @on_success )
+          #TODO: when 300..399 then handle on_redirect if follow_location is false
           when 400..499 then @on_missing.call(self, self.response_code) if defined?( @on_missing )
           when 500..599 then @on_failure.call(self, self.response_code) if defined?( @on_failure )
         end
@@ -329,6 +330,7 @@ if defined?(Curl)
 
       def idle?
         @idle = true unless defined?( @idle )
+        @idle
       end
     end
   end
