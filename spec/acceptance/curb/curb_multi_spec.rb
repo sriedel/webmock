@@ -13,7 +13,6 @@ unless RUBY_PLATFORM =~ /java/
       let( :uri_400 ) { "http://www.example.com/400" }
       let( :uri_500 ) { "http://www.example.com/500" }
       let( :uri_redirect_target ) { "http://www.example.com/redirect_target" }
-      # let( :uri_timeout ) { "http://www.example.com/timeout" }
 
       let( :easy_200 ) { Curl::Easy.new( uri_200 ) }
       let( :easy_300 ) do
@@ -28,8 +27,7 @@ unless RUBY_PLATFORM =~ /java/
       end
       let( :easy_400 ) { Curl::Easy.new( uri_400 ) }
       let( :easy_500 ) { Curl::Easy.new( uri_500 ) }
-      # let( :easy_timeout ) { Curl::Easy.new( uri_timeout ) }
-      
+
       let( :response_200 ) { "I am a 200 response" }
       let( :response_300 ) { "I am a 300 response" }
       let( :response_301 ) { "I am a 301 response" }
@@ -38,7 +36,6 @@ unless RUBY_PLATFORM =~ /java/
       let( :response_500 ) { "I am a 500 response" }
 
       let( :easy_requests ) { [ easy_200, easy_300, easy_300_follow_redirect, easy_400, easy_500 ] }
-      # let( :easy_requests ) { [ easy_200, easy_300, easy_300_follow_redirect, easy_400, easy_500, easy_timeout ] }
 
       let( :on_success_called_for ) { [] }
       let( :on_failure_called_for ) { [] }
@@ -83,31 +80,31 @@ unless RUBY_PLATFORM =~ /java/
             on_redirect_called_for << easy
             callbacks_called_for[easy] << :on_redirect
           end
-          easy.on_success do |*args| 
+          easy.on_success do |*args|
             on_success_called_for << easy.url
             callbacks_called_for[easy] << :on_success
           end
-          easy.on_failure do |*args| 
+          easy.on_failure do |*args|
             on_failure_called_for << easy.url
             callbacks_called_for[easy] << :on_failure
           end
-          easy.on_missing do |*args| 
+          easy.on_missing do |*args|
             on_missing_called_for << easy.url
             callbacks_called_for[easy] << :on_missing
           end
-          easy.on_body do |body_data| 
+          easy.on_body do |body_data|
             on_body_called_for[easy.url] = body_data
             callbacks_called_for[easy] << :on_body
           end
-          easy.on_header do |header_data| 
+          easy.on_header do |header_data|
             on_header_called_for[easy.url] << header_data
             callbacks_called_for[easy] << :on_header
           end
-          easy.on_complete do |completed_request| 
+          easy.on_complete do |completed_request|
             on_complete_called_for << completed_request.url
             callbacks_called_for[easy] << :on_complete
           end
-          easy.on_progress do |dl_total, dl_now, ul_total, ul_now| 
+          easy.on_progress do |dl_total, dl_now, ul_total, ul_now|
             on_progress_called_for[easy] = [dl_total, dl_now, ul_total, ul_now]
             callbacks_called_for[easy] << :on_progress
           end
@@ -207,7 +204,7 @@ unless RUBY_PLATFORM =~ /java/
 
       let( :response_head ) { "quux" }
       let( :response_code_head ) { 200 }
-      
+
       let( :response_delete ) { "" }
       let( :response_code_delete ) { 204 }
 
@@ -216,12 +213,6 @@ unless RUBY_PLATFORM =~ /java/
 
       let( :post_body ) { "foo=bar&baz=quux" }
       let( :put_data ) { "putting data" }
-
-      let( :easy_get ) { Curl::Easy.new( uri_get ) }
-      let( :easy_post ) { Curl::Easy.new( uri_post ) }
-      let( :easy_head ) { Curl::Easy.new( uri_head ) }
-      let( :easy_delete ) { Curl::Easy.new( uri_delete ) }
-      let( :easy_put ) { Curl::Easy.new( uri_put ) }
 
       let( :results ) { {} }
 
@@ -242,7 +233,7 @@ unless RUBY_PLATFORM =~ /java/
       before( :each ) do
         stub_request( :get, uri_get ).
           to_return( :status => response_code_get, :body => response_get, :headers => {} )
-       
+
         stub_request( :post, uri_post ).
           with( :body => post_body ).
           to_return( :status => response_code_post, :body => response_post, :headers => {} )
@@ -278,7 +269,7 @@ unless RUBY_PLATFORM =~ /java/
                                 :put_data    => put_data,
                                 :method      => :put,
                                 :on_success  => on_success_lambda } ] ) do |easy, code, method|
-            case method 
+            case method
               when :get    then easy.url.should == uri_get
               when :head   then easy.url.should == uri_head
               when :delete then easy.url.should == uri_delete
@@ -288,24 +279,23 @@ unless RUBY_PLATFORM =~ /java/
             end
           end
 
-
-          result_get = results[easy_get.url]
+          result_get = results[uri_get]
           result_get[:status].should == response_code_get
           result_get[:body].should == response_get
 
-          result_post = results[easy_post.url]
+          result_post = results[uri_post]
           result_post[:status].should == response_code_post
           result_post[:body].should == response_post
 
-          result_head = results[easy_head.url]
+          result_head = results[uri_head]
           result_head[:status].should == response_code_head
           result_head[:body].should == response_head
 
-          result_delete = results[easy_delete.url]
+          result_delete = results[uri_delete]
           result_delete[:status].should == response_code_delete
           result_delete[:body].should == response_delete
 
-          result_put = results[easy_put.url]
+          result_put = results[uri_put]
           result_put[:status].should == response_code_put
           result_put[:body].should == response_put
         end
@@ -340,96 +330,206 @@ unless RUBY_PLATFORM =~ /java/
                                 :method      => :put,
                                 :on_success  => on_success_lambda } ],
                               :pipeline     => true,
-                              :max_connects => max_connections )
+                              :max_connects => max_connections ) do |easy, code, method|
+            case method
+              when :get    then easy.url.should == uri_get
+              when :head   then easy.url.should == uri_head
+              when :delete then easy.url.should == uri_delete
+              when :post   then easy.url.should == uri_post
+              when :put    then easy.url.should == uri_put
+              else raise "Unexpected method #{method.inspect} encountered"
+            end
+          end
           # FIXME: How can we access the generated multi?
           #        Curl::Easy#multi in a callback doesn't work...
 
-          result_get = results[easy_get.url]
+          result_get = results[uri_get]
           result_get[:status].should == response_code_get
           result_get[:body].should == response_get
 
-          result_post = results[easy_post.url]
+          result_post = results[uri_post]
           result_post[:status].should == response_code_post
           result_post[:body].should == response_post
 
-          result_head = results[easy_head.url]
+          result_head = results[uri_head]
           result_head[:status].should == response_code_head
           result_head[:body].should == response_head
 
-          result_delete = results[easy_delete.url]
+          result_delete = results[uri_delete]
           result_delete[:status].should == response_code_delete
           result_delete[:body].should == response_delete
 
-          result_put = results[easy_put.url]
+          result_put = results[uri_put]
           result_put[:status].should == response_code_put
           result_put[:body].should == response_put
-          
         end
       end
     end
 
     describe ".get" do
-      context "without easy options" do
-        context "without multi options" do
-          it "should process all the requests as expected"
-        end
+      let( :uri_1 ) { "http://www.example.com/1" }
+      let( :uri_2 ) { "http://www.example.com/2" }
+      let( :uri_3 ) { "http://www.example.com/3" }
 
-        context "with multi options" do
-          it "should process all the requests with the multi options applied"
-        end
+      let( :response_1 ) { "foobar" }
+      let( :response_code_1 ) { 200 }
+
+      let( :response_2 ) { "barbaz" }
+      let( :response_code_2 ) { 201 }
+
+      let( :response_3 ) { "quux" }
+      let( :response_code_3 ) { 204 }
+
+      let( :results ) { {} }
+
+      before( :each ) do
+        stub_request( :get, uri_1 ).
+          to_return( :status => response_code_1, :body => response_1, :headers => {} )
+
+        stub_request( :get, uri_2 ).
+          to_return( :status => response_code_2, :body => response_2, :headers => {} )
+
+        stub_request( :get, uri_3 ).
+          to_return( :status => response_code_3, :body => response_3, :headers => {} )
       end
 
-      context "with easy options" do
-        context "without multi options" do
-          it "should process all the requests with the easy options applied"
-        end
+      it "should process all the requests as expected" do
+        Curl::Multi.get( [ uri_1, uri_2, uri_3 ] ) do |easy|
+          case easy.url
+            when uri_1
+              easy.response_code.should == response_code_1
+              easy.body_str.should == response_1
 
-        context "with multi options" do
-          it "should process all the requests with the easy options and multi options applied"
+            when uri_2
+              easy.response_code.should == response_code_2
+              easy.body_str.should == response_2
+
+            when uri_3
+              easy.response_code.should == response_code_3
+              easy.body_str.should == response_3
+
+            else raise "Unexpected url #{easy.url.inspect} received in the result"
+          end
         end
       end
     end
 
     describe ".post" do
-      context "without easy options" do
-        context "without multi options" do
-          it "should process all the requests as expected"
-        end
+      let( :uri_1 ) { "http://www.example.com/1" }
+      let( :uri_2 ) { "http://www.example.com/2" }
+      let( :uri_3 ) { "http://www.example.com/3" }
 
-        context "with multi options" do
-          it "should process all the requests with the multi options applied"
-        end
+      let( :post_fields1 ) { { "foo1" => "bar1", "baz1" => "quux1" } }
+      let( :post_fields2 ) { { "foo2" => "bar2", "baz2" => "quux2" } }
+      let( :post_fields3 ) { { "foo3" => "bar3", "baz3" => "quux3" } }
+
+      let( :response_1 ) { "foobar" }
+      let( :response_code_1 ) { 200 }
+
+      let( :response_2 ) { "barbaz" }
+      let( :response_code_2 ) { 201 }
+
+      let( :response_3 ) { "quux" }
+      let( :response_code_3 ) { 204 }
+
+      let( :results ) { {} }
+
+      before( :each ) do
+        stub_request( :post, uri_1 ).
+          with( :body => "foo1=bar1&baz1=quux1" ).
+          to_return( :status => response_code_1, :body => response_1, :headers => {} )
+
+        stub_request( :post, uri_2 ).
+          with( :body => "foo2=bar2&baz2=quux2" ).
+          to_return( :status => response_code_2, :body => response_2, :headers => {} )
+
+        stub_request( :post, uri_3 ).
+          with( :body => "foo3=bar3&baz3=quux3" ).
+          to_return( :status => response_code_3, :body => response_3, :headers => {} )
       end
 
-      context "with easy options" do
-        context "without multi options" do
-          it "should process all the requests with the easy options applied"
-        end
+      it "should process all the requests as expected" do
+        Curl::Multi.post( [ { :url         => uri_1,
+                              :post_fields => post_fields1 },
+                            { :url         => uri_2,
+                              :post_fields => post_fields2 },
+                            { :url         => uri_3,
+                              :post_fields => post_fields3 } ] ) do |easy|
+          case easy.url
+            when uri_1
+              easy.response_code.should == response_code_1
+              easy.body_str.should == response_1
 
-        context "with multi options" do
-          it "should process all the requests with the easy options and multi options applied"
+            when uri_2
+              easy.response_code.should == response_code_2
+              easy.body_str.should == response_2
+
+            when uri_3
+              easy.response_code.should == response_code_3
+              easy.body_str.should == response_3
+
+            else raise "Unexpected url #{easy.url.inspect} received in the result"
+          end
         end
       end
     end
 
     describe ".put" do
-      context "without easy options" do
-        context "without multi options" do
-          it "should process all the requests as expected"
-        end
+      let( :uri_1 ) { "http://www.example.com/1" }
+      let( :uri_2 ) { "http://www.example.com/2" }
+      let( :uri_3 ) { "http://www.example.com/3" }
 
-        context "with multi options" do
-          it "should process all the requests with the multi options applied"
-        end
+      let( :put_data1 ) { "foo" }
+      let( :put_data2 ) { "bar" }
+      let( :put_data3 ) { "baz" }
+
+      let( :response_1 ) { "foobar" }
+      let( :response_code_1 ) { 200 }
+
+      let( :response_2 ) { "barbaz" }
+      let( :response_code_2 ) { 201 }
+
+      let( :response_3 ) { "quux" }
+      let( :response_code_3 ) { 204 }
+
+      let( :results ) { {} }
+
+      before( :each ) do
+        stub_request( :put, uri_1 ).
+          with( :body => put_data1 ).
+          to_return( :status => response_code_1, :body => response_1, :headers => {} )
+
+        stub_request( :put, uri_2 ).
+          with( :body => put_data2 ).
+          to_return( :status => response_code_2, :body => response_2, :headers => {} )
+
+        stub_request( :put, uri_3 ).
+          with( :body => put_data3 ).
+          to_return( :status => response_code_3, :body => response_3, :headers => {} )
       end
 
-      context "with easy options" do
-        context "without multi options" do
-          it "should process all the requests with the easy options applied"
-        end
+      it "should process all the requests as expected" do
+        Curl::Multi.put( [ { :url      => uri_1,
+                             :put_data => put_data1 },
+                           { :url      => uri_2,
+                             :put_data => put_data2 },
+                           { :url      => uri_3,
+                             :put_data => put_data3 } ] ) do |easy|
+          case easy.url
+            when uri_1
+              easy.response_code.should == response_code_1
+              easy.body_str.should == response_1
 
-        context "with multi options" do
-          it "should process all the requests with the easy options and multi options applied"
+            when uri_2
+              easy.response_code.should == response_code_2
+              easy.body_str.should == response_2
+
+            when uri_3
+              easy.response_code.should == response_code_3
+              easy.body_str.should == response_3
+
+            else raise "Unexpected url #{easy.url.inspect} received in the result"
+          end
         end
       end
     end
@@ -476,7 +576,7 @@ unless RUBY_PLATFORM =~ /java/
       before( :each ) do
         stub_request( :get, uri_1 ).
           to_return( :status => response_code_1, :body => response_1, :headers => {} )
-       
+
         stub_request( :post, uri_2 ).
           with( :body => post_body.to_json, :headers => { "Content-Type" => "application/json" } ).
           to_return( :status => response_code_2, :body => response_2, :headers => {} )
@@ -534,15 +634,6 @@ unless RUBY_PLATFORM =~ /java/
         end
 
         idle_loop_calls.should == completed_requests + 1
-      end
-      
-      context "when network access is enabled" do
-        it "should perform real requests for all requests"
-      end
-
-      context "when network access is enabled for some requests" do
-        it "should use webmock for the requests without network access"
-        it "should perform real requests for requetsts with network access"
       end
     end
 

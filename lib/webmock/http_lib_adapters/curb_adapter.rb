@@ -77,7 +77,7 @@ if defined?(Curl)
         if webmock_response
           build_curb_response(webmock_response)
           WebMock::CallbackRegistry.invoke_callbacks( { :lib => :curb },
-                                                      request_signature, 
+                                                      request_signature,
                                                       webmock_response )
           invoke_curb_callbacks
           true
@@ -100,7 +100,7 @@ if defined?(Curl)
 
           if WebMock::CallbackRegistry.any_callbacks?
             webmock_response = build_webmock_response
-                                                        
+
             WebMock::CallbackRegistry.invoke_callbacks( { :lib => :curb, :real_request => true },
                                                         request_signature,
                                                         webmock_response)
@@ -118,7 +118,7 @@ if defined?(Curl)
         uri.path = uri.normalized_path.gsub("[^:]//","/")
         if self.userpwd
           uri.user, uri.password = self.userpwd.split( ":", 2 )
-        else 
+        else
           uri.user     = self.username
           uri.password = self.password
         end
